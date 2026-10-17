@@ -14,7 +14,7 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor =
+    const statusColor =
         _aiConnected ? JaxxColors.cyan : JaxxColors.textMuted;
 
     return Scaffold(
