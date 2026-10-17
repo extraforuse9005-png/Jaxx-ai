@@ -7,7 +7,7 @@ import 'voice_settings_screen.dart';
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const String _appVersion = '0.3.0 (build 3)';
+  static const String _appVersion = '0.3.1 (build 4)';
 
   @override
   Widget build(BuildContext context) {
@@ -27,40 +27,27 @@ class SettingsScreen extends StatelessWidget {
           const _SectionHeader('Voice'),
           ListTile(
             leading: const Icon(Icons.record_voice_over_outlined),
-            title: const Text('Speech and voice output'),
-            subtitle: const Text('Language, speed, pitch, auto-send'),
+            title: const Text('Voice, language aur male voice'),
+            subtitle: const Text('Voice chuno, speed, pitch'),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const VoiceSettingsScreen()),
             ),
-          ),
-          const _SectionHeader('Appearance'),
-          const ListTile(
-            leading: Icon(Icons.palette_outlined),
-            title: Text('Theme'),
-            subtitle: Text('Dark theme only for now.'),
-          ),
-          const _SectionHeader('Personality'),
-          const ListTile(
-            leading: Icon(Icons.face_outlined),
-            title: Text('Assistant name'),
-            subtitle: Text('JAXX. Customisation comes later.'),
           ),
           const _SectionHeader('Permissions'),
           const ListTile(
             leading: Icon(Icons.shield_outlined),
             title: Text('Permissions used'),
             subtitle: Text(
-              'Internet (Gemini), Microphone (voice input). '
-              'Phone ke installed apps ki list app kholne ke liye padhi jaati hai.',
+              'Internet (Gemini), Microphone (voice). Installed apps ki list app kholne ke liye padhi jaati hai.',
             ),
           ),
-          const _SectionHeader('Memory and Privacy'),
+          const _SectionHeader('Privacy'),
           const ListTile(
             leading: Icon(Icons.lock_outline),
             title: Text('Stored data'),
             subtitle: Text(
               'API key aur voice settings is phone par save hain. '
-              'Chat sirf app khuli rehne tak memory me rehti hai.',
+              'Baat-cheet sirf app khuli rehne tak memory me rehti hai.',
             ),
           ),
           const _SectionHeader('Developer'),

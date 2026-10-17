@@ -33,7 +33,9 @@ class GeminiService {
       'Be honest when you are unsure. You can open installed apps and YouTube '
       'searches when asked, but you cannot play music, tap the screen or send '
       'messages yet, so never claim you did. '
-      'Keep answers concise unless the user asks for detail. Avoid excessive emojis.';
+      'Your replies are spoken aloud, so use plain words: no markdown, no asterisks, '
+      'no code blocks, no tables. Keep answers short unless the user asks for detail. '
+      'Avoid excessive emojis.';
 
   /// Sends the conversation to Gemini and returns the reply text.
   Future<String> reply({

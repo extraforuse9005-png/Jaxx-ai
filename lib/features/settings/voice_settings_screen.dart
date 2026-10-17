@@ -14,6 +14,8 @@ class VoiceSettingsScreen extends StatefulWidget {
 class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
   final VoiceService _voice = VoiceService();
   VoiceSettings _s = const VoiceSettings();
+  List<Map<String, String>> _voices = [];
+  bool _loadingVoices = true;
 
   static const Map<String, String> _languages = {
     'en-IN': 'English (India)',
@@ -25,8 +27,10 @@ class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
   void initState() {
     super.initState();
     VoiceSettings.load().then((s) {
-      if (mounted) setState(() => _s = s);
-    });
+      if (!mounted) return;
+      setState(() => _s = s);
+      _loadVoices();
+    }).catchError((_) {});
   }
 
   @override
@@ -35,9 +39,21 @@ class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
     super.dispose();
   }
 
-  void _update(VoiceSettings s) {
+  Future<void> _loadVoices() async {
+    setState(() => _loadingVoices = true);
+    final list = await _voice.voicesFor(_s.language);
+    if (mounted) {
+      setState(() {
+        _voices = list;
+        _loadingVoices = false;
+      });
+    }
+  }
+
+  void _update(VoiceSettings s, {bool reloadVoices = false}) {
     setState(() => _s = s);
     s.save();
+    if (reloadVoices) _loadVoices();
   }
 
   @override
@@ -50,14 +66,54 @@ class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
           DropdownButtonFormField<String>(
             key: ValueKey(_s.language),
             initialValue: _s.language,
-            decoration: const InputDecoration(labelText: 'Language (listen + speak)'),
+            decoration: const InputDecoration(labelText: 'Language'),
             items: _languages.entries
                 .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
                 .toList(),
             onChanged: (v) {
-              if (v != null) _update(_s.copyWith(language: v));
+              if (v != null) _update(_s.copyWith(language: v, voiceName: ''), reloadVoices: true);
             },
           ),
+          const SizedBox(height: 20),
+          const Text(
+            'Voice chuno (male-sounding wali). Har voice ko "Test voice" se sun kar pasand wali chuno.',
+            style: TextStyle(color: JaxxColors.textMuted),
+          ),
+          const SizedBox(height: 8),
+          ListTile(
+            title: const Text("Phone ki default voice"),
+            trailing: _s.voiceName.isEmpty
+                ? const Icon(Icons.check, color: JaxxColors.cyan)
+                : null,
+            onTap: () => _update(_s.copyWith(voiceName: '', voiceLocale: '')),
+          ),
+          if (_loadingVoices)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: LinearProgressIndicator(),
+            )
+          else if (_voices.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                'Is phone me is language ki extra voices nahi mili. '
+                'Google Text-to-speech app me English (India) voice download karo, phir yahan wapas aao.',
+                style: TextStyle(color: JaxxColors.textMuted),
+              ),
+            )
+          else
+            ..._voices.map((v) {
+              final selected = _s.voiceName == v['name'];
+              return ListTile(
+                title: Text(v['name']!),
+                subtitle: Text(v['locale']!),
+                trailing: selected ? const Icon(Icons.check, color: JaxxColors.cyan) : null,
+                onTap: () => _update(_s.copyWith(
+                  voiceName: v['name'],
+                  voiceLocale: v['locale'],
+                )),
+              );
+            }),
           const SizedBox(height: 20),
           Text('Speech rate: ${_s.speechRate.toStringAsFixed(2)}'),
           Slider(
@@ -67,30 +123,26 @@ class _VoiceSettingsScreenState extends State<VoiceSettingsScreen> {
             onChanged: (v) => setState(() => _s = _s.copyWith(speechRate: v)),
             onChangeEnd: (v) => _update(_s.copyWith(speechRate: v)),
           ),
-          const SizedBox(height: 12),
-          Text('Pitch: ${_s.pitch.toStringAsFixed(2)}'),
+          Text('Pitch (kam = bhari awaaz): ${_s.pitch.toStringAsFixed(2)}'),
           Slider(
             value: _s.pitch,
             min: 0.5,
-            max: 2.0,
+            max: 1.5,
             onChanged: (v) => setState(() => _s = _s.copyWith(pitch: v)),
             onChangeEnd: (v) => _update(_s.copyWith(pitch: v)),
           ),
           SwitchListTile(
-            title: const Text('Speak JAXX replies'),
+            title: const Text('JAXX replies bolkar sunaye'),
             value: _s.speakReplies,
             onChanged: (v) => _update(_s.copyWith(speakReplies: v)),
-          ),
-          SwitchListTile(
-            title: const Text('Auto-send after speaking'),
-            subtitle: const Text('Off: text box me aayega, aap check karke bhejoge.'),
-            value: _s.autoSend,
-            onChanged: (v) => _update(_s.copyWith(autoSend: v)),
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
             style: FilledButton.styleFrom(backgroundColor: JaxxColors.electricBlue),
-            onPressed: () => _voice.speak('Bhai, voice check. Sun pa raha hai?', _s),
+            onPressed: () => _voice.speak(
+              'Bhai, ye meri awaaz hai. Pasand aayi?',
+              _s,
+            ),
             icon: const Icon(Icons.volume_up),
             label: const Text('Test voice'),
           ),

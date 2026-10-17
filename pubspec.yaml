@@ -1,7 +1,7 @@
 name: jaxx_ai
 description: JAXX AI - your personal AI best friend.
 publish_to: 'none'
-version: 0.3.0+3
+version: 0.3.1+4
 
 environment:
   sdk: '>=3.4.0 <4.0.0'

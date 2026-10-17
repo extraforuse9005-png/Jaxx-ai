@@ -8,7 +8,6 @@ class ParsedCommand {
 }
 
 /// Decides whether a message is a phone action or a question for Gemini.
-/// Only the patterns below are supported. Everything else goes to the AI.
 class CommandRouter {
   CommandRouter._();
 
@@ -16,6 +15,8 @@ class CommandRouter {
       r'^(?:play|chalao)\s+(.+?)\s+(?:on youtube|youtube par|youtube pe)$');
   static final RegExp _youtubeSearch = RegExp(
       r'^(?:search|dhoondo|search karo)\s+(.+?)\s+(?:on youtube|youtube par|youtube pe)$');
+  static final RegExp _openOnYoutube = RegExp(
+      r'^(?:open|kholo|khol do)\s+(.+?)\s+(?:on youtube|youtube par|youtube pe)$');
   static final RegExp _youtubePlay = RegExp(r'^(?:play|play karo)\s+(.+)$');
   static final RegExp _openPrefix = RegExp(r'^(?:open|kholo|khol do|khol)\s+(.+)$');
   static final RegExp _openSuffix = RegExp(r'^(.+?)\s+(?:kholo|khol do|khol|open karo)$');
@@ -27,6 +28,7 @@ class CommandRouter {
     'chup ho jao',
     'chup raho',
     'bolna band karo',
+    'band karo',
     'bas karo',
   };
 
@@ -40,6 +42,7 @@ class CommandRouter {
 
     final ytMatch = _youtubePlayOn.firstMatch(text) ??
         _youtubeSearch.firstMatch(text) ??
+        _openOnYoutube.firstMatch(text) ??
         _youtubePlay.firstMatch(text);
     if (ytMatch != null) {
       return ParsedCommand(CommandType.youtubeSearch,

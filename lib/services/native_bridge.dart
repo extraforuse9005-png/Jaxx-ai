@@ -15,8 +15,7 @@ class NativeBridge {
 
   static Future<List<AppInfo>> listApps() async {
     try {
-      final raw = await _channel
-          .invokeListMethod<Map<Object?, Object?>>('listApps');
+      final raw = await _channel.invokeListMethod<Map<Object?, Object?>>('listApps');
       final list = raw ?? const <Map<Object?, Object?>>[];
       return list
           .map((m) => AppInfo(

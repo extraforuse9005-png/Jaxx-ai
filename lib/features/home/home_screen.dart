@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/jaxx_theme.dart';
+import '../../models/chat_message.dart';
 import '../../services/api_key_store.dart';
+import '../../services/app_launcher.dart';
+import '../../services/command_router.dart';
+import '../../services/gemini_service.dart';
+import '../../services/voice_service.dart';
+import '../../services/voice_settings.dart';
 import '../../widgets/ai_orb.dart';
-import '../chat/chat_screen.dart';
 import '../settings/settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -14,33 +19,191 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  static const String _idleStatus = 'Orb dabao, baat shuru karte hain';
+
   final ApiKeyStore _store = ApiKeyStore();
-  bool _hasKey = false;
+  final GeminiService _gemini = GeminiService();
+  final VoiceService _voice = VoiceService();
+  final List<ChatMessage> _history = [];
+
+  VoiceSettings _settings = const VoiceSettings();
+  OrbState _orb = OrbState.idle;
+  String _status = _idleStatus;
+  bool _active = false;
+  int _emptyTurns = 0;
 
   @override
   void initState() {
     super.initState();
-    _refreshKeyStatus();
+    VoiceSettings.load().then((s) {
+      if (mounted) setState(() => _settings = s);
+    }).catchError((_) {});
   }
 
-  Future<void> _refreshKeyStatus() async {
-    bool has;
-    try {
-      has = await _store.hasApiKey();
-    } catch (_) {
-      has = false;
+  @override
+  void dispose() {
+    _active = false;
+    _gemini.dispose();
+    _voice.dispose();
+    super.dispose();
+  }
+
+  void _set(OrbState orb, String status) {
+    if (!mounted) return;
+    setState(() {
+      _orb = orb;
+      _status = status;
+    });
+  }
+
+  Future<void> _onOrbTap() async {
+    if (_active) {
+      await _endSession('Theek hai bhai, band kar diya.');
+      return;
     }
-    if (mounted) setState(() => _hasKey = has);
+    await _startSession();
   }
 
-  Future<void> _open(Widget screen) async {
-    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
-    await _refreshKeyStatus();
+  Future<void> _startSession() async {
+    _set(OrbState.thinking, 'Connecting...');
+
+    String? key;
+    try {
+      key = await _store.readApiKey();
+    } catch (_) {
+      key = null;
+    }
+    if (key == null || key.isEmpty) {
+      _set(OrbState.idle, 'API key nahi hai. Settings me daalo.');
+      return;
+    }
+
+    final ready = await _voice.init();
+    if (!ready) {
+      _set(OrbState.idle, 'Mic chalu nahi hua. Mic permission allow karo.');
+      return;
+    }
+
+    _active = true;
+    _emptyTurns = 0;
+    _set(OrbState.speaking, 'Connected. Bolo bhai.');
+    await _voice.speak('Haan bhai, bolo. Main sun raha hoon.', _settings);
+    if (_active) _runLoop();
+  }
+
+  Future<void> _runLoop() async {
+    while (_active) {
+      _set(OrbState.listening, 'Sun raha hoon...');
+
+      final result = await _voice.listenOnce(
+        localeId: _settings.language,
+        onPartial: (words) {
+          if (mounted && _active && words.isNotEmpty) {
+            setState(() => _status = words);
+          }
+        },
+      );
+      if (!_active) break;
+
+      final error = result.error;
+      if (error != null &&
+          (error.contains('permission') || error.contains('insufficient'))) {
+        await _endSession('Mic permission nahi mili bhai. Phone settings me allow karo.');
+        break;
+      }
+
+      final heard = result.text.trim();
+      if (heard.isEmpty) {
+        _emptyTurns++;
+        if (_emptyTurns >= 4) {
+          await _endSession('Kaafi der se kuch suna nahi. Session band kar raha hoon.');
+          break;
+        }
+        continue;
+      }
+      _emptyTurns = 0;
+
+      final cmd = CommandRouter.parse(heard);
+      if (cmd.type == CommandType.stopSpeaking) {
+        await _endSession('Theek hai bhai, chup ho gaya.');
+        break;
+      }
+
+      _set(OrbState.thinking, 'Soch raha hoon...');
+      final reply = await _respond(heard, cmd);
+      if (!_active) break;
+
+      if (_settings.speakReplies) {
+        _set(OrbState.speaking, reply);
+        await _voice.speak(reply, _settings);
+      } else {
+        _set(OrbState.idle, reply);
+      }
+    }
+    await _voice.stopListening();
+  }
+
+  Future<String> _respond(String heard, ParsedCommand cmd) async {
+    switch (cmd.type) {
+      case CommandType.openApp:
+        return (await AppLauncher.openApp(cmd.target)).message;
+      case CommandType.youtubeSearch:
+        return (await AppLauncher.youtubeSearch(cmd.target)).message;
+      case CommandType.stopSpeaking:
+      case CommandType.askAi:
+        return _askGemini(heard);
+    }
+  }
+
+  Future<String> _askGemini(String heard) async {
+    String? key;
+    String model = ApiKeyStore.defaultModel;
+    try {
+      key = await _store.readApiKey();
+      model = await _store.readModel();
+    } catch (_) {
+      key = null;
+    }
+    if (key == null || key.isEmpty) {
+      return 'API key nahi hai bhai. Settings me daalo.';
+    }
+
+    _history.add(ChatMessage(
+      text: heard,
+      author: MessageAuthor.user,
+      createdAt: DateTime.now(),
+    ));
+    try {
+      final reply = await _gemini.reply(
+        apiKey: key,
+        model: model,
+        history: List.of(_history),
+      );
+      _history.add(ChatMessage(
+        text: reply,
+        author: MessageAuthor.jaxx,
+        createdAt: DateTime.now(),
+      ));
+      return reply;
+    } on GeminiException catch (e) {
+      _history.removeLast();
+      return e.message;
+    } catch (_) {
+      _history.removeLast();
+      return 'Kuch gadbad ho gayi bhai. Dobara bolo.';
+    }
+  }
+
+  Future<void> _endSession(String message) async {
+    _active = false;
+    await _voice.stopListening();
+    await _voice.stopSpeaking();
+    _set(OrbState.idle, message);
   }
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = _hasKey ? JaxxColors.cyan : JaxxColors.textMuted;
+    final orbSize = (MediaQuery.of(context).size.width * 0.6).clamp(160.0, 260.0);
 
     return Scaffold(
       appBar: AppBar(
@@ -49,81 +212,48 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(letterSpacing: 2, fontWeight: FontWeight.w600),
         ),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 4),
-            child: Row(
-              children: [
-                Icon(Icons.circle, size: 10, color: statusColor),
-                const SizedBox(width: 6),
-                Text(
-                  _hasKey ? 'Key saved' : 'No key',
-                  style: TextStyle(color: statusColor, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => _open(const SettingsScreen()),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),
       body: SafeArea(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final orbSize = (constraints.maxWidth * 0.6).clamp(160.0, 260.0);
-
-            return Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AiOrb(size: orbSize),
-                    const SizedBox(height: 32),
-                    const Text(
-                      "Hey bhai, I'm JAXX.",
-                      style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.w600,
-                        color: JaxxColors.textPrimary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Text mode. Voice arrives in Phase 3.',
-                      style: TextStyle(color: JaxxColors.textMuted),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _hasKey
-                          ? 'AI brain: API key saved. Settings me test kar sakte ho.'
-                          : 'AI brain: API key not set. Settings > AI Brain me daalo.',
-                      style: const TextStyle(color: JaxxColors.textMuted, fontSize: 12),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          backgroundColor: JaxxColors.electricBlue,
-                          foregroundColor: JaxxColors.textPrimary,
-                        ),
-                        onPressed: () => _open(const ChatScreen()),
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        label: const Text('Talk to JAXX'),
-                      ),
-                    ),
-                  ],
+        child: Column(
+          children: [
+            Expanded(
+              child: Center(
+                child: GestureDetector(
+                  onTap: _onOrbTap,
+                  child: AiOrb(state: _orb, size: orbSize),
                 ),
               ),
-            );
-          },
+            ),
+            const Text(
+              "Hey bhai, I'm JAXX.",
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.w600,
+                color: JaxxColors.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Text(
+                _status,
+                textAlign: TextAlign.center,
+                maxLines: 6,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: JaxxColors.textMuted, fontSize: 14),
+              ),
+            ),
+            const SizedBox(height: 40),
+          ],
         ),
       ),
     );

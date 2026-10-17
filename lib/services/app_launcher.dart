@@ -11,32 +11,53 @@ class ActionResult {
 class AppLauncher {
   AppLauncher._();
 
+  /// If an app is not found in the installed list, these websites are opened.
+  /// YouTube's website opens the YouTube app automatically when it is installed.
+  static const Map<String, String> _webFallback = {
+    'youtube': 'https://www.youtube.com',
+    'chrome': 'https://www.google.com',
+    'google': 'https://www.google.com',
+  };
+
   static Future<ActionResult> openApp(String target) async {
-    final apps = await NativeBridge.listApps();
-    if (apps.isEmpty) {
-      return const ActionResult(
-        success: false,
-        message: 'Installed apps ki list nahi mil paayi. Native setup check karo.',
-      );
-    }
-
     final query = target.toLowerCase().trim();
-    AppInfo? match = _firstWhereOrNull(
-        apps, (a) => a.name.toLowerCase() == query);
-    match ??= _firstWhereOrNull(
-        apps, (a) => a.name.toLowerCase().contains(query));
 
-    if (match == null) {
-      return ActionResult(
-        success: false,
-        message: 'Bhai, "$target" naam ka app phone me installed nahi dikha.',
-      );
+    final apps = await NativeBridge.listApps();
+    if (apps.isNotEmpty) {
+      AppInfo? match = _firstWhereOrNull(
+          apps, (a) => a.name.toLowerCase() == query);
+      match ??= _firstWhereOrNull(
+          apps, (a) => a.name.toLowerCase().contains(query));
+
+      if (match != null) {
+        final ok = await NativeBridge.launchApp(match.packageName);
+        return ok
+            ? ActionResult(success: true, message: 'Done bhai, ${match.name} khol diya.')
+            : ActionResult(success: false, message: '${match.name} khul nahi paya.');
+      }
     }
 
-    final ok = await NativeBridge.launchApp(match.packageName);
-    return ok
-        ? ActionResult(success: true, message: 'Done bhai, ${match.name} khol diya.')
-        : ActionResult(success: false, message: '${match.name} khul nahi paya. Dobara try karo.');
+    String? fallbackKey;
+    for (final key in _webFallback.keys) {
+      if (query.contains(key)) {
+        fallbackKey = key;
+        break;
+      }
+    }
+    if (fallbackKey != null) {
+      final ok = await NativeBridge.openUrl(_webFallback[fallbackKey]!);
+      return ok
+          ? ActionResult(
+              success: true,
+              message: 'Done bhai, website khol di. App list me nahi dikha.',
+            )
+          : const ActionResult(success: false, message: 'Browser nahi khul paya.');
+    }
+
+    return ActionResult(
+      success: false,
+      message: '"$target" naam ka app phone me nahi mila.',
+    );
   }
 
   static Future<ActionResult> youtubeSearch(String query) async {
@@ -44,14 +65,11 @@ class AppLauncher {
         'https://www.youtube.com/results?search_query=${Uri.encodeQueryComponent(query)}';
     final ok = await NativeBridge.openUrl(url);
     return ok
-        ? ActionResult(
+        ? const ActionResult(
             success: true,
-            message: 'YouTube par "$query" ka search khol diya. Gaana tap karke aap play karoge, main abhi play nahi kar sakta.',
+            message: 'YouTube par search khol diya. Gaana aapko tap karna hoga.',
           )
-        : const ActionResult(
-            success: false,
-            message: 'YouTube ya browser nahi khul paya.',
-          );
+        : const ActionResult(success: false, message: 'YouTube ya browser nahi khul paya.');
   }
 
   static AppInfo? _firstWhereOrNull(List<AppInfo> list, bool Function(AppInfo) test) {

@@ -14,6 +14,12 @@ void main() {
     expect(c.target, 'chrome');
   });
 
+  test('open shorts on YouTube goes to YouTube search', () {
+    final c = CommandRouter.parse('open shorts on YouTube');
+    expect(c.type, CommandType.youtubeSearch);
+    expect(c.target, 'shorts');
+  });
+
   test('play on YouTube', () {
     final c = CommandRouter.parse('play Kesariya on YouTube');
     expect(c.type, CommandType.youtubeSearch);

@@ -3,10 +3,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 class VoiceSettings {
   const VoiceSettings({
     this.speechRate = 0.5,
-    this.pitch = 1.0,
-    this.autoSend = false,
+    this.pitch = 0.9,
+    this.autoSend = true,
     this.speakReplies = true,
     this.language = 'en-IN',
+    this.voiceName = '',
+    this.voiceLocale = '',
   });
 
   final double speechRate;
@@ -15,12 +17,18 @@ class VoiceSettings {
   final bool speakReplies;
   final String language;
 
+  /// Empty means the phone's default voice.
+  final String voiceName;
+  final String voiceLocale;
+
   VoiceSettings copyWith({
     double? speechRate,
     double? pitch,
     bool? autoSend,
     bool? speakReplies,
     String? language,
+    String? voiceName,
+    String? voiceLocale,
   }) {
     return VoiceSettings(
       speechRate: speechRate ?? this.speechRate,
@@ -28,6 +36,8 @@ class VoiceSettings {
       autoSend: autoSend ?? this.autoSend,
       speakReplies: speakReplies ?? this.speakReplies,
       language: language ?? this.language,
+      voiceName: voiceName ?? this.voiceName,
+      voiceLocale: voiceLocale ?? this.voiceLocale,
     );
   }
 
@@ -36,6 +46,8 @@ class VoiceSettings {
   static const String _kAutoSend = 'voice_auto_send';
   static const String _kSpeak = 'voice_speak_replies';
   static const String _kLang = 'voice_language';
+  static const String _kVoiceName = 'voice_name';
+  static const String _kVoiceLocale = 'voice_locale';
 
   static Future<VoiceSettings> load() async {
     final p = await SharedPreferences.getInstance();
@@ -46,6 +58,8 @@ class VoiceSettings {
       autoSend: p.getBool(_kAutoSend) ?? d.autoSend,
       speakReplies: p.getBool(_kSpeak) ?? d.speakReplies,
       language: p.getString(_kLang) ?? d.language,
+      voiceName: p.getString(_kVoiceName) ?? d.voiceName,
+      voiceLocale: p.getString(_kVoiceLocale) ?? d.voiceLocale,
     );
   }
 
@@ -56,5 +70,7 @@ class VoiceSettings {
     await p.setBool(_kAutoSend, autoSend);
     await p.setBool(_kSpeak, speakReplies);
     await p.setString(_kLang, language);
+    await p.setString(_kVoiceName, voiceName);
+    await p.setString(_kVoiceLocale, voiceLocale);
   }
 }
