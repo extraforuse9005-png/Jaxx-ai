@@ -1,61 +1,65 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/jaxx_theme.dart';
+import 'ai_brain_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const String _appVersion = '0.1.0 (build 1)';
+  static const String _appVersion = '0.2.0 (build 2)';
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: ListView(
-        children: const [
-          _SectionHeader('AI Brain'),
+        children: [
+          const _SectionHeader('AI Brain'),
           ListTile(
-            leading: Icon(Icons.psychology_outlined),
-            title: Text('Gemini connection'),
-            subtitle: Text('Not connected. API key setup arrives in Phase 2.'),
+            leading: const Icon(Icons.psychology_outlined),
+            title: const Text('Gemini connection'),
+            subtitle: const Text('API key, model aur connection test'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AiBrainScreen()),
+            ),
           ),
-          _SectionHeader('Voice'),
-          ListTile(
+          const _SectionHeader('Voice'),
+          const ListTile(
             leading: Icon(Icons.record_voice_over_outlined),
             title: Text('Speech and voice output'),
             subtitle: Text('Arrives in Phase 3.'),
           ),
-          _SectionHeader('Appearance'),
-          ListTile(
+          const _SectionHeader('Appearance'),
+          const ListTile(
             leading: Icon(Icons.palette_outlined),
             title: Text('Theme'),
             subtitle: Text('Dark theme only for now.'),
           ),
-          _SectionHeader('Personality'),
-          ListTile(
+          const _SectionHeader('Personality'),
+          const ListTile(
             leading: Icon(Icons.face_outlined),
             title: Text('Assistant name'),
-            subtitle: Text('JAXX (customisation arrives in Phase 2).'),
+            subtitle: Text('JAXX. Customisation comes later.'),
           ),
-          _SectionHeader('Permissions'),
-          ListTile(
+          const _SectionHeader('Permissions'),
+          const ListTile(
             leading: Icon(Icons.shield_outlined),
             title: Text('Permissions requested'),
             subtitle: Text(
-              'None yet. JAXX asks only when a feature needs one.',
+              'Internet only (for Gemini). JAXX asks for more only when a feature needs it.',
             ),
           ),
-          _SectionHeader('Memory and Privacy'),
-          ListTile(
+          const _SectionHeader('Memory and Privacy'),
+          const ListTile(
             leading: Icon(Icons.lock_outline),
             title: Text('Stored data'),
             subtitle: Text(
-              'Chat messages live only in memory and are cleared when you '
-              'close the app.',
+              'API key and model are kept in secure storage on this phone. '
+              'Chat messages live only in memory and are cleared when you close the app.',
             ),
           ),
-          _SectionHeader('Developer'),
-          ListTile(
+          const _SectionHeader('Developer'),
+          const ListTile(
             leading: Icon(Icons.info_outline),
             title: Text('App version'),
             subtitle: Text(_appVersion),

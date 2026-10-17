@@ -1,21 +1,46 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme/jaxx_theme.dart';
+import '../../services/api_key_store.dart';
 import '../../widgets/ai_orb.dart';
 import '../chat/chat_screen.dart';
 import '../settings/settings_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
-  // Phase 1 has no AI connection yet, so this is honestly false.
-  // Phase 2 replaces it with a real connection check.
-  static const bool _aiConnected = false;
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  final ApiKeyStore _store = ApiKeyStore();
+  bool _hasKey = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshKeyStatus();
+  }
+
+  Future<void> _refreshKeyStatus() async {
+    bool has;
+    try {
+      has = await _store.hasApiKey();
+    } catch (_) {
+      has = false;
+    }
+    if (mounted) setState(() => _hasKey = has);
+  }
+
+  Future<void> _open(Widget screen) async {
+    await Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    await _refreshKeyStatus();
+  }
 
   @override
   Widget build(BuildContext context) {
-    const statusColor =
-        _aiConnected ? JaxxColors.cyan : JaxxColors.textMuted;
+    final statusColor = _hasKey ? JaxxColors.cyan : JaxxColors.textMuted;
 
     return Scaffold(
       appBar: AppBar(
@@ -31,7 +56,7 @@ class HomeScreen extends StatelessWidget {
                 Icon(Icons.circle, size: 10, color: statusColor),
                 const SizedBox(width: 6),
                 Text(
-                  _aiConnected ? 'Online' : 'Offline',
+                  _hasKey ? 'Key saved' : 'No key',
                   style: TextStyle(color: statusColor, fontSize: 12),
                 ),
               ],
@@ -40,16 +65,13 @@ class HomeScreen extends StatelessWidget {
           IconButton(
             tooltip: 'Settings',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const SettingsScreen()),
-            ),
+            onPressed: () => _open(const SettingsScreen()),
           ),
         ],
       ),
       body: SafeArea(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Scale the orb to the screen, but keep it within sensible limits.
             final orbSize = (constraints.maxWidth * 0.6).clamp(160.0, 260.0);
 
             return Center(
@@ -71,14 +93,17 @@ class HomeScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'Text mode. Voice arrives in a later phase.',
+                      'Text mode. Voice arrives in Phase 3.',
                       style: TextStyle(color: JaxxColors.textMuted),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 12),
-                    const Text(
-                      'AI brain: not connected yet',
-                      style: TextStyle(color: JaxxColors.textMuted, fontSize: 12),
+                    Text(
+                      _hasKey
+                          ? 'AI brain: API key saved. Settings me test kar sakte ho.'
+                          : 'AI brain: API key not set. Settings > AI Brain me daalo.',
+                      style: const TextStyle(color: JaxxColors.textMuted, fontSize: 12),
+                      textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 32),
                     SizedBox(
@@ -89,9 +114,7 @@ class HomeScreen extends StatelessWidget {
                           backgroundColor: JaxxColors.electricBlue,
                           foregroundColor: JaxxColors.textPrimary,
                         ),
-                        onPressed: () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ChatScreen()),
-                        ),
+                        onPressed: () => _open(const ChatScreen()),
                         icon: const Icon(Icons.chat_bubble_outline),
                         label: const Text('Talk to JAXX'),
                       ),

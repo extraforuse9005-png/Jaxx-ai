@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/jaxx_theme.dart';
 import '../../models/chat_message.dart';
+import '../../services/api_key_store.dart';
+import '../../services/gemini_service.dart';
+import '../settings/ai_brain_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -13,41 +16,29 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _input = TextEditingController();
   final ScrollController _scroll = ScrollController();
+  final GeminiService _gemini = GeminiService();
+  final ApiKeyStore _store = ApiKeyStore();
+
   final List<ChatMessage> _messages = [
     ChatMessage(
-      text: "Bhai, text chat is ready. The AI brain connects in Phase 2, "
-          "so until then I can only tell you that honestly.",
+      text: "Bhai, main ready hoon. Settings me Gemini API key save karo, phir jo poochna hai poochho.",
       author: MessageAuthor.jaxx,
       createdAt: DateTime.now(),
     ),
   ];
 
+  bool _sending = false;
+  String? _failedText;
+
   @override
   void dispose() {
     _input.dispose();
     _scroll.dispose();
+    _gemini.dispose();
     super.dispose();
   }
 
-  void _send() {
-    final text = _input.text.trim();
-    if (text.isEmpty) return;
-
-    setState(() {
-      _messages.add(ChatMessage(
-        text: text,
-        author: MessageAuthor.user,
-        createdAt: DateTime.now(),
-      ));
-      _messages.add(ChatMessage(
-        text: "I got your message, but my AI brain isn't connected yet. "
-            "I won't make up an answer. Gemini support arrives in Phase 2.",
-        author: MessageAuthor.jaxx,
-        createdAt: DateTime.now(),
-      ));
-    });
-    _input.clear();
-
+  void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
         _scroll.animateTo(
@@ -59,10 +50,103 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  Future<void> _send({String? retryText}) async {
+    final text = (retryText ?? _input.text).trim();
+    if (text.isEmpty || _sending) return;
+
+    String? apiKey;
+    String model = ApiKeyStore.defaultModel;
+    try {
+      apiKey = await _store.readApiKey();
+      model = await _store.readModel();
+    } catch (_) {
+      apiKey = null;
+    }
+
+    if (apiKey == null || apiKey.isEmpty) {
+      setState(() {
+        _messages.add(ChatMessage(
+          text: 'Bhai, pehle Settings > AI Brain me Gemini API key save karo. '
+              'Phir main asli jawab de paunga.',
+          author: MessageAuthor.jaxx,
+          createdAt: DateTime.now(),
+        ));
+      });
+      _scrollToBottom();
+      return;
+    }
+
+    setState(() {
+      if (retryText == null) {
+        _messages.add(ChatMessage(
+          text: text,
+          author: MessageAuthor.user,
+          createdAt: DateTime.now(),
+        ));
+        _input.clear();
+      }
+      _sending = true;
+      _failedText = null;
+    });
+    _scrollToBottom();
+
+    try {
+      final reply = await _gemini.reply(
+        apiKey: apiKey,
+        model: model,
+        history: List.of(_messages),
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          text: reply,
+          author: MessageAuthor.jaxx,
+          createdAt: DateTime.now(),
+        ));
+      });
+    } on GeminiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          text: e.message,
+          author: MessageAuthor.jaxx,
+          createdAt: DateTime.now(),
+        ));
+        _failedText = text;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _messages.add(ChatMessage(
+          text: 'Kuch unexpected error aaya. Dobara try karo.',
+          author: MessageAuthor.jaxx,
+          createdAt: DateTime.now(),
+        ));
+        _failedText = text;
+      });
+    } finally {
+      if (mounted) setState(() => _sending = false);
+      _scrollToBottom();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final itemCount = _messages.length + (_sending ? 1 : 0);
+
     return Scaffold(
-      appBar: AppBar(title: const Text('JAXX Chat')),
+      appBar: AppBar(
+        title: const Text('JAXX Chat'),
+        actions: [
+          IconButton(
+            tooltip: 'AI Brain settings',
+            icon: const Icon(Icons.tune),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const AiBrainScreen()),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Column(
           children: [
@@ -70,11 +154,19 @@ class _ChatScreenState extends State<ChatScreen> {
               child: ListView.builder(
                 controller: _scroll,
                 padding: const EdgeInsets.all(16),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) =>
-                    _MessageBubble(message: _messages[index]),
+                itemCount: itemCount,
+                itemBuilder: (context, index) {
+                  if (index >= _messages.length) return const _TypingBubble();
+                  return _MessageBubble(message: _messages[index]);
+                },
               ),
             ),
+            if (_failedText != null)
+              TextButton.icon(
+                onPressed: _sending ? null : () => _send(retryText: _failedText),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
               child: Row(
@@ -94,13 +186,37 @@ class _ChatScreenState extends State<ChatScreen> {
                   const SizedBox(width: 8),
                   IconButton.filled(
                     tooltip: 'Send',
-                    onPressed: _send,
+                    onPressed: _sending ? null : () => _send(),
                     icon: const Icon(Icons.send_rounded),
                   ),
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TypingBubble extends StatelessWidget {
+  const _TypingBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.symmetric(vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: JaxxColors.surfaceHigh,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: JaxxColors.cyan.withValues(alpha: 0.25)),
+        ),
+        child: const Text(
+          'JAXX soch raha hai...',
+          style: TextStyle(color: JaxxColors.textMuted, fontStyle: FontStyle.italic),
         ),
       ),
     );
@@ -135,7 +251,7 @@ class _MessageBubble extends StatelessWidget {
                 : JaxxColors.cyan.withValues(alpha: 0.25),
           ),
         ),
-        child: Text(
+        child: SelectableText(
           message.text,
           style: const TextStyle(color: JaxxColors.textPrimary, height: 1.4),
         ),
