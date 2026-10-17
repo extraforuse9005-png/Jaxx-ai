@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/jaxx_theme.dart';
 import 'ai_brain_screen.dart';
+import 'voice_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
-  static const String _appVersion = '0.2.0 (build 2)';
+  static const String _appVersion = '0.3.0 (build 3)';
 
   @override
   Widget build(BuildContext context) {
@@ -24,10 +25,13 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           const _SectionHeader('Voice'),
-          const ListTile(
-            leading: Icon(Icons.record_voice_over_outlined),
-            title: Text('Speech and voice output'),
-            subtitle: Text('Arrives in Phase 3.'),
+          ListTile(
+            leading: const Icon(Icons.record_voice_over_outlined),
+            title: const Text('Speech and voice output'),
+            subtitle: const Text('Language, speed, pitch, auto-send'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const VoiceSettingsScreen()),
+            ),
           ),
           const _SectionHeader('Appearance'),
           const ListTile(
@@ -44,9 +48,10 @@ class SettingsScreen extends StatelessWidget {
           const _SectionHeader('Permissions'),
           const ListTile(
             leading: Icon(Icons.shield_outlined),
-            title: Text('Permissions requested'),
+            title: Text('Permissions used'),
             subtitle: Text(
-              'Internet only (for Gemini). JAXX asks for more only when a feature needs it.',
+              'Internet (Gemini), Microphone (voice input). '
+              'Phone ke installed apps ki list app kholne ke liye padhi jaati hai.',
             ),
           ),
           const _SectionHeader('Memory and Privacy'),
@@ -54,8 +59,8 @@ class SettingsScreen extends StatelessWidget {
             leading: Icon(Icons.lock_outline),
             title: Text('Stored data'),
             subtitle: Text(
-              'API key and model are kept in secure storage on this phone. '
-              'Chat messages live only in memory and are cleared when you close the app.',
+              'API key aur voice settings is phone par save hain. '
+              'Chat sirf app khuli rehne tak memory me rehti hai.',
             ),
           ),
           const _SectionHeader('Developer'),
